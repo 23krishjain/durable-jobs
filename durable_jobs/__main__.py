@@ -13,6 +13,8 @@ def main():
     submit.add_argument('numbers', type=int, nargs='*')
     status = sub.add_parser('status')
     status.add_argument('id')
+    cancel = sub.add_parser('cancel')
+    cancel.add_argument('id')
     sub.add_parser('work-once')
     args = parser.parse_args()
     queue = Queue(args.db)
@@ -22,6 +24,8 @@ def main():
         print(queue.submit('sum_numbers', payload, key=args.key))
     elif args.command == 'status':
         print(json.dumps(queue.get(args.id), indent=2))
+    elif args.command == 'cancel':
+        print(queue.cancel(args.id))
     else:
         print(run_one(queue) or 'idle')
 

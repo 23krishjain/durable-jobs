@@ -49,6 +49,15 @@ Attempts consume a bounded budget; exhausted jobs become dead on recovery.
 - Retry delay persisted as an availability timestamp. The demo worker chooses
 bounded exponential delays (1,2,4... up to60seconds); the store accepts an
 explicit positive delay.
+- `renew` extends a live lease from now; stale owners cannot renew. Long tasks
+can heartbeat instead of sizing one big lease.
+- Cancellation: a queued job cancels at once (terminal `canceled`). A running
+job only gets a `cancel_requested` flag. The owner sees it as `CancelRequested`
+on its next `renew` and calls `acknowledge_cancel`. If the owner finishes
+first, `complete` wins and the job stays `succeeded`. If the owner dies, the
+expired lease goes to `canceled`, not back to the queue. Nothing is killed
+forcibly. `python -m durable_jobs --db PATH cancel ID` is the CLI form.
+- Day-1 databases upgrade in place (new state and column, tested).
 - Allowlisted deterministic `sum_numbers` task only. No arbitrary import,
 shell, network or user-supplied code execution. `work-once` runs one attempt.
 - Tests for concurrency, retries, stale owners, deduplication, persistence and
@@ -68,17 +77,17 @@ broker distributed over hosts. Concurrency tests show correctness for their
 specific contenders, not throughput, scalability or full fault tolerance.
 No power-loss, disk corruption, network filesystem or clock-jump test is
 claimed. Wall-clock changes affect leases; jobs longer than their lease can
-be retried. There is no lease renewal yet. Tasks should be short/pure and
-lease duration must cover their execution.
+be retried unless the worker renews. Cancellation is cooperative: a worker
+that never renews learns of it only when its lease expires.
 
-No API, cancellation, dead-letter replay, heartbeat, metrics, scheduler,
+No API, dead-letter replay, automatic heartbeat thread, metrics, scheduler,
 priority queue, retention or production deployment yet. Dead jobs can be
 inspected with status. A stuck process is recovered after its lease expires
-and another claim runs. Database schema migrations are not implemented.
+and another claim runs. Only the one Day-1 to Day-2 migration exists.
 
 ## Evidence
 
-`python -m unittest discover -s tests -v` runs22 tests without dependencies.
+`python -m unittest discover -s tests -v` runs 35 tests without dependencies.
 The subprocess recovery test uses an actual child process that exits with
 code23 after claiming. A deterministic injected clock moves past expiry
 without a flaky sleep. Concurrent claims/submissions use independent SQLite
